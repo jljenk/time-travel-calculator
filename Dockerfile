@@ -1,5 +1,6 @@
 # Stage 1: Build
-FROM node:20-alpine AS builder
+# Build for linux/amd64 platform for AWS App Runner compatibility
+FROM --platform=linux/amd64 node:20-alpine AS builder
 WORKDIR /app
 RUN npm install -g pnpm
 COPY . .
@@ -12,7 +13,8 @@ RUN test -d apps/backend/dist || (echo "Backend dist directory not found" && exi
 RUN test -d apps/frontend/dist || (echo "Frontend dist directory not found" && exit 1)
 
 # Stage 2: Runtime
-FROM node:20-alpine
+# Use linux/amd64 platform for AWS App Runner compatibility
+FROM --platform=linux/amd64 node:20-alpine
 WORKDIR /app
 COPY --from=builder /app/apps/backend/package.json ./backend/
 COPY --from=builder /app/apps/backend/dist ./backend

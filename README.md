@@ -227,10 +227,13 @@ aws ecr get-login-password --region us-west-2 | docker login --username AWS --pa
 
 4. **Build and tag the image:**
 ```bash
+# The Dockerfile already includes --platform=linux/amd64 for AWS compatibility
 docker build -t time-travel-calculator .
 docker tag time-travel-calculator:latest <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/time-travel-calculator:latest
 ```
    Replace `<AWS_ACCOUNT_ID>` with your account ID and `us-west-2` with your selected region.
+   
+   **Note:** If you're on an M1/M2 Mac (ARM), the Dockerfile automatically builds for `linux/amd64` to ensure compatibility with AWS App Runner. If you need to override this, use: `docker build --platform=linux/amd64 -t time-travel-calculator .`
 
 5. **Push to ECR:**
 ```bash
@@ -256,6 +259,7 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/time-travel-calcula
    - **VPC connector**: None (unless you need VPC access)
    - **Security**: Use default settings or configure as needed
 6. **Configure service - Health check:**
+   - **Select html**
    - **Health check path**: `/api/health`
    - **Health check interval**: 10 seconds (default)
    - **Health check timeout**: **10 seconds** (increase from default 5 seconds for slower startups)
@@ -290,11 +294,12 @@ This means the container image was pulled successfully but failed to start or pa
 
 #### Quick Fix Checklist (If Container Works Locally but Fails on App Runner):
 
-1. ✅ **Increase Health Check Timeout** to 10-15 seconds (most common fix)
-2. ✅ **Increase Resources**: CPU to 0.5-1 vCPU, Memory to 1-2 GB
-3. ✅ **Verify Health Endpoint**: Test `curl http://localhost:8080/api/health` returns `{"status":"ok"}` quickly
-4. ✅ **Check CloudWatch Logs**: Look for specific error messages in `/aws/apprunner/<service-name>/<service-id>/application`
-5. ✅ **Ensure NODE_ENV=production** is set in App Runner environment variables
+1. ✅ **Platform Compatibility (M1/M2 Mac Users)**: Build for `linux/amd64` platform - The Dockerfile now includes this automatically, but if you built before, rebuild with: `docker build --platform=linux/amd64 -t time-travel-calculator .`
+2. ✅ **Increase Health Check Timeout** to 10-15 seconds (most common fix)
+3. ✅ **Increase Resources**: CPU to 0.5-1 vCPU, Memory to 1-2 GB
+4. ✅ **Verify Health Endpoint**: Test `curl http://localhost:8080/api/health` returns `{"status":"ok"}` quickly
+5. ✅ **Check CloudWatch Logs**: Look for specific error messages in `/aws/apprunner/<service-name>/<service-id>/application`
+6. ✅ **Ensure NODE_ENV=production** is set in App Runner environment variables
 
 #### 1. **Check CloudWatch Logs for Detailed Errors**
 
@@ -381,7 +386,38 @@ If CPU/memory is too low, the container may start slowly or fail health checks e
 - Check CloudWatch metrics for resource utilization
 - Local Docker has access to more resources, so App Runner may need more to start reliably
 
-#### 7. **Module Resolution Issues (ES Modules)**
+#### 7. **Platform Architecture Mismatch (M1/M2 Mac Users)**
+
+If you're developing on an M1/M2 Mac (ARM64) and App Runner uses x86_64/amd64, your Docker image may not work correctly.
+
+**Symptoms:**
+- Container works locally but fails on App Runner
+- Errors about "exec format error" or architecture mismatches
+- Container starts but crashes immediately
+
+**Solution:**
+The Dockerfile now includes `--platform=linux/amd64` automatically. If you built your image before this update:
+
+1. **Rebuild for the correct platform:**
+   ```bash
+   docker build --platform=linux/amd64 -t time-travel-calculator .
+   ```
+
+2. **Verify the platform:**
+   ```bash
+   docker inspect time-travel-calculator | grep Architecture
+   # Should show: "Architecture": "amd64"
+   ```
+
+3. **Re-tag and push to ECR:**
+   ```bash
+   docker tag time-travel-calculator:latest <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/time-travel-calculator:latest
+   docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/time-travel-calculator:latest
+   ```
+
+**Note:** Building for a different platform (cross-compilation) may take longer, but it's necessary for AWS App Runner compatibility.
+
+#### 8. **Module Resolution Issues (ES Modules)**
 
 If using ES modules, ensure:
 - `package.json` has `"type": "module"` in the backend directory

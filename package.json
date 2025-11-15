@@ -1,0 +1,17 @@
+{
+  "name": "time-travel-parameter-calculator",
+  "version": "1.0.0",
+  "description": "Time Travel Parameter Calculator - Full-stack web app",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter backend dev & pnpm --filter frontend dev",
+    "build": "pnpm --filter backend build && pnpm --filter frontend build",
+    "start": "pnpm --filter backend start",
+    "docker:build": "docker build -t time-travel-calculator .",
+    "docker:run": "docker run -p 8080:8080 time-travel-calculator"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
+

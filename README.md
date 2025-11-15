@@ -250,15 +250,15 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/time-travel-calcula
    - **Deployment trigger**: Choose "Automatic" (deploys on new image push) or "Manual"
 4. **Configure service:**
    - **Service name**: `time-travel-calculator`
-   - **Virtual CPU**: 0.25 vCPU (minimum)
-   - **Memory**: 0.5 GB (minimum)
+   - **Virtual CPU**: **0.5 vCPU** (recommended: 1 vCPU for better reliability)
+   - **Memory**: **1 GB** (recommended: 2 GB for better reliability)
 5. **Configure service - Networking:**
    - **VPC connector**: None (unless you need VPC access)
    - **Security**: Use default settings or configure as needed
 6. **Configure service - Health check:**
    - **Health check path**: `/api/health`
    - **Health check interval**: 10 seconds (default)
-   - **Health check timeout**: 5 seconds (default)
+   - **Health check timeout**: **10 seconds** (increase from default 5 seconds for slower startups)
    - **Healthy threshold**: 1 (default)
    - **Unhealthy threshold**: 5 (default)
 7. **Configure service - Port:**
@@ -288,6 +288,14 @@ If you see logs like:
 
 This means the container image was pulled successfully but failed to start or pass health checks. Here are common causes and solutions:
 
+#### Quick Fix Checklist (If Container Works Locally but Fails on App Runner):
+
+1. ✅ **Increase Health Check Timeout** to 10-15 seconds (most common fix)
+2. ✅ **Increase Resources**: CPU to 0.5-1 vCPU, Memory to 1-2 GB
+3. ✅ **Verify Health Endpoint**: Test `curl http://localhost:8080/api/health` returns `{"status":"ok"}` quickly
+4. ✅ **Check CloudWatch Logs**: Look for specific error messages in `/aws/apprunner/<service-name>/<service-id>/application`
+5. ✅ **Ensure NODE_ENV=production** is set in App Runner environment variables
+
 #### 1. **Check CloudWatch Logs for Detailed Errors**
 
 1. Go to **CloudWatch** → **Log groups** in AWS Console
@@ -310,21 +318,38 @@ This means the container image was pulled successfully but failed to start or pa
 - Check that the server starts and responds to requests
 - Verify the Dockerfile CMD is correct: `CMD ["node", "backend/server.js"]`
 
-#### 3. **Health Check Failing**
+#### 3. **Health Check Failing (Most Common for "Works Locally but Fails on App Runner")**
 
-App Runner checks `/api/health` by default. If this endpoint fails, deployment will fail.
+App Runner checks `/api/health` by default. If this endpoint fails or doesn't respond in time, deployment will fail.
 
-**Verify:**
-- The health check path is set to `/api/health` in App Runner configuration
-- The server responds with `200 OK` and `{"status": "ok"}`
-- The server starts within the health check timeout (default 5 seconds)
+**If your container works locally but fails on App Runner, try these fixes:**
 
-**Test locally:**
-```bash
-docker run -p 8080:8080 -e NODE_ENV=production <your-ecr-image-uri>
-curl http://localhost:8080/api/health
-# Should return: {"status":"ok"}
-```
+1. **Increase Health Check Timeout:**
+   - In App Runner configuration, increase **Health check timeout** from 5 seconds to **10-15 seconds**
+   - This gives the container more time to start up
+
+2. **Increase Startup Time:**
+   - App Runner may need more time for the container to fully initialize
+   - Consider adding a startup delay or ensuring the server responds immediately
+
+3. **Verify Health Endpoint Responds Quickly:**
+   ```bash
+   # Test that health endpoint responds within 1-2 seconds
+   time curl http://localhost:8080/api/health
+   # Should return quickly: {"status":"ok"}
+   ```
+
+4. **Check Health Check Path:**
+   - Verify the health check path is exactly `/api/health` (case-sensitive)
+   - Ensure it returns `200 OK` with JSON: `{"status":"ok"}`
+
+5. **Test Health Endpoint Thoroughly:**
+   ```bash
+   docker run -p 8080:8080 -e NODE_ENV=production <your-ecr-image-uri>
+   # Wait a few seconds for startup, then test:
+   curl -v http://localhost:8080/api/health
+   # Should return HTTP 200 with: {"status":"ok"}
+   ```
 
 #### 4. **Port Configuration Mismatch**
 
@@ -346,14 +371,15 @@ app.listen(PORT, '0.0.0.0', () => {
 - `NODE_ENV=production` is set in App Runner configuration
 - Any other required environment variables are set
 
-#### 6. **Resource Constraints**
+#### 6. **Resource Constraints (Common for "Works Locally but Fails on App Runner")**
 
-If CPU/memory is too low, the container may fail to start.
+If CPU/memory is too low, the container may start slowly or fail health checks even if it works locally.
 
 **Solution:**
-- Increase CPU to at least 0.5 vCPU
-- Increase memory to at least 1 GB
+- **Increase CPU** from 0.25 vCPU to **at least 0.5 vCPU** (recommended: 1 vCPU)
+- **Increase memory** from 0.5 GB to **at least 1 GB** (recommended: 2 GB)
 - Check CloudWatch metrics for resource utilization
+- Local Docker has access to more resources, so App Runner may need more to start reliably
 
 #### 7. **Module Resolution Issues (ES Modules)**
 

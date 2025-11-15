@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 
 app.use(cors());
 app.use(express.json());
@@ -23,7 +23,8 @@ app.get('/api/health', (req, res) => {
 
 // Serve frontend in production
 if (process.env.NODE_ENV === 'production') {
-  const frontendPath = join(process.cwd(), 'frontend');
+  // From /app/backend, go up one level to /app, then into frontend
+  const frontendPath = join(__dirname, '..', 'frontend');
   app.use(express.static(frontendPath));
   
   app.get('*', (req, res) => {
@@ -31,7 +32,7 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
 

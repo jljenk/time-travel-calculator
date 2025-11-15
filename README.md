@@ -172,6 +172,10 @@ docker run -p 8080:8080 time-travel-calculator
 
 Visit `http://localhost:8080` in your browser.
 
+**Note:** If you get an error like "port is already allocated", another container or process is using port 8080. You can either:
+- Stop the existing container: `docker ps` to find it, then `docker stop <container-name>`
+- Use a different port: `docker run -p 8081:8080 time-travel-calculator` (then access at `http://localhost:8081`)
+
 ## AWS Deployment
 
 This application can be deployed to AWS using several methods. Below are the most common deployment options:
@@ -273,6 +277,206 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/time-travel-calcula
 2. Once the status shows "Running", click on your service
 3. Find the **Default domain** in the service details
 4. Your application is available at: `https://<service-id>.<region>.awsapprunner.com`
+
+### Troubleshooting: App Runner Deployment Failures
+
+If you see logs like:
+```
+[AppRunner] Successfully pulled your application image from ECR.
+[AppRunner] Failed to deploy your application image.
+```
+
+This means the container image was pulled successfully but failed to start or pass health checks. Here are common causes and solutions:
+
+#### 1. **Check CloudWatch Logs for Detailed Errors**
+
+1. Go to **CloudWatch** → **Log groups** in AWS Console
+2. Look for log group: `/aws/apprunner/<service-name>/<service-id>/application`
+3. Check the logs for specific error messages
+
+#### 2. **Container Not Starting Properly**
+
+**Common issues:**
+- Application crashes on startup
+- Missing dependencies
+- Incorrect CMD/ENTRYPOINT in Dockerfile
+- Module resolution errors (ES modules vs CommonJS)
+
+**Solution:**
+- Test the container locally first:
+```bash
+  docker run -p 8080:8080 -e NODE_ENV=production <your-ecr-image-uri>
+  ```
+- Check that the server starts and responds to requests
+- Verify the Dockerfile CMD is correct: `CMD ["node", "backend/server.js"]`
+
+#### 3. **Health Check Failing**
+
+App Runner checks `/api/health` by default. If this endpoint fails, deployment will fail.
+
+**Verify:**
+- The health check path is set to `/api/health` in App Runner configuration
+- The server responds with `200 OK` and `{"status": "ok"}`
+- The server starts within the health check timeout (default 5 seconds)
+
+**Test locally:**
+```bash
+docker run -p 8080:8080 -e NODE_ENV=production <your-ecr-image-uri>
+curl http://localhost:8080/api/health
+# Should return: {"status":"ok"}
+```
+
+#### 4. **Port Configuration Mismatch**
+
+**Verify:**
+- Container exposes port `8080` (Dockerfile: `EXPOSE 8080`)
+- App Runner is configured to use port `8080`
+- Server listens on `0.0.0.0:8080` (not `localhost:8080`)
+
+**Check server.ts:**
+```typescript
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
+```
+
+#### 5. **Missing Environment Variables**
+
+**Verify:**
+- `NODE_ENV=production` is set in App Runner configuration
+- Any other required environment variables are set
+
+#### 6. **Resource Constraints**
+
+If CPU/memory is too low, the container may fail to start.
+
+**Solution:**
+- Increase CPU to at least 0.5 vCPU
+- Increase memory to at least 1 GB
+- Check CloudWatch metrics for resource utilization
+
+#### 7. **Module Resolution Issues (ES Modules)**
+
+If using ES modules, ensure:
+- `package.json` has `"type": "module"` in the backend directory
+- The working directory is correct when running the server
+- All imports use `.js` extensions (even for TypeScript-compiled files)
+
+**Quick Fix:**
+Update the Dockerfile CMD to ensure proper module resolution:
+```dockerfile
+WORKDIR /app/backend
+CMD ["node", "server.js"]
+```
+
+#### 8. **Check Build Output**
+
+Verify the build process creates the correct files:
+- `apps/backend/dist/server.js` exists
+- `apps/frontend/dist/` contains the built frontend files
+- All dependencies are installed in the production image
+
+**Debug Steps:**
+1. **Check App Runner logs** in CloudWatch for specific error messages
+2. **Test container locally** before pushing to ECR
+3. **Verify health endpoint** responds correctly
+4. **Check resource usage** - increase CPU/memory if needed
+5. **Review Dockerfile** - ensure all paths and commands are correct
+
+### Troubleshooting: Docker Build Failures
+
+If you encounter errors like:
+```
+ERROR: failed to build: failed to solve: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 2
+```
+
+This means the build process is failing. Here's how to debug and fix it:
+
+#### 1. **Test Build Locally First**
+
+Before building the Docker image, test the build locally:
+```bash
+pnpm install
+pnpm build
+```
+
+This will show you the exact error message. Common issues:
+- TypeScript compilation errors
+- Missing dependencies
+- Frontend build errors (Vite)
+
+#### 2. **Check TypeScript Errors**
+
+If TypeScript compilation fails:
+```bash
+# Check backend TypeScript errors
+cd apps/backend
+pnpm build
+
+# Check frontend TypeScript errors  
+cd apps/frontend
+pnpm build
+```
+
+#### 3. **Verify All Files Are Present**
+
+Ensure all source files are present and not excluded by `.dockerignore`:
+- `apps/backend/src/**/*.ts`
+- `apps/frontend/src/**/*.tsx`
+- `package.json` files
+- `tsconfig.json` files
+
+#### 4. **Check for Missing Dependencies**
+
+Ensure `pnpm-lock.yaml` is up to date:
+```bash
+pnpm install
+```
+
+#### 5. **Build Docker Image with Verbose Output**
+
+The updated Dockerfile now builds backend and frontend separately, which will help identify which part fails:
+```bash
+docker build -t time-travel-calculator . --progress=plain --no-cache
+```
+
+The `--progress=plain` flag shows all build output, and `--no-cache` ensures a fresh build.
+
+#### 6. **Common Build Issues**
+
+**TypeScript strict mode errors:**
+- Check `tsconfig.json` for strict settings
+- Fix any TypeScript errors shown in the build output
+
+**Missing dependencies:**
+- Run `pnpm install` locally to update `pnpm-lock.yaml`
+- Ensure all dependencies are listed in `package.json`
+
+**Frontend build errors:**
+- Check Vite configuration in `vite.config.ts`
+- Verify all React components compile correctly
+
+**Memory issues:**
+- Docker build may need more memory
+- Try building on a machine with more RAM
+- Or increase Docker's memory limit in settings
+
+#### 7. **Quick Fix: Rebuild from Scratch**
+
+If all else fails, try a clean rebuild:
+```bash
+# Clean local build artifacts
+rm -rf node_modules apps/*/node_modules apps/*/dist
+
+# Reinstall dependencies
+pnpm install
+
+# Test build locally
+pnpm build
+
+# If local build works, rebuild Docker image
+docker build -t time-travel-calculator . --no-cache
+```
 
 ## AWS Deployment
 Domain (time-travel-calculator.com) configured manually through Route53. A link to app url.

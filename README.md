@@ -479,4 +479,4 @@ docker build -t time-travel-calculator . --no-cache
 ```
 
 ## AWS Deployment
-Domain (time-travel-calculator.com) configured manually through Route53. A link to app url.
+Domain (time-travel-calculator.com) managed in Route53 and manually configured manually through App Runner (using an alias)

@@ -228,7 +228,7 @@ aws ecr get-login-password --region us-west-2 | docker login --username AWS --pa
 4. **Build and tag the image:**
 ```bash
 # The Dockerfile already includes --platform=linux/amd64 for AWS compatibility
-docker build -t time-travel-calculator .
+docker build --platform=linux/amd64 -t time-travel-calculator .
 docker tag time-travel-calculator:latest <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/time-travel-calculator:latest
 ```
    Replace `<AWS_ACCOUNT_ID>` with your account ID and `us-west-2` with your selected region.
@@ -259,7 +259,7 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/time-travel-calcula
    - **VPC connector**: None (unless you need VPC access)
    - **Security**: Use default settings or configure as needed
 6. **Configure service - Health check:**
-   - **Select html**
+   - **Select http**
    - **Health check path**: `/api/health`
    - **Health check interval**: 10 seconds (default)
    - **Health check timeout**: **10 seconds** (increase from default 5 seconds for slower startups)

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DateInput } from './components/DateInput';
 import { MetricCard } from './components/MetricCard';
 import { ResultsTable } from './components/ResultsTable';
+import { TimeTravelEffect } from './components/TimeTravelEffect';
 import { calculateParameters } from './lib/api';
 import { CalculationResponse } from './lib/types';
 import { formatDate, formatNumber } from './lib/format';
@@ -10,18 +11,34 @@ function App() {
   const [data, setData] = useState<CalculationResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [calculationComplete, setCalculationComplete] = useState(false);
+  const [showTimeTravel, setShowTimeTravel] = useState(false);
 
   const handleCalculate = async (date: string) => {
     setLoading(true);
     setError(null);
+    setCalculationComplete(false);
+    setData(null);
     try {
       const result = await calculateParameters(date);
-      setData(result);
+      // Wait 10 seconds before showing results
+      setTimeout(() => {
+        setData(result);
+        setCalculationComplete(true);
+        setLoading(false);
+      }, 10000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
       setLoading(false);
     }
+  };
+
+  const handleTravel = () => {
+    setShowTimeTravel(true);
+    // Hide the effect after animation completes
+    setTimeout(() => {
+      setShowTimeTravel(false);
+    }, 5000);
   };
 
   const handleCopyJSON = () => {
@@ -56,8 +73,9 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sci-fi-dark via-purple-900/20 to-sci-fi-dark text-white">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="min-h-screen bg-gradient-to-br from-sci-fi-dark via-purple-900/20 to-sci-fi-dark text-white relative overflow-hidden">
+      {showTimeTravel && <TimeTravelEffect />}
+      <div className="container mx-auto px-4 py-8 max-w-7xl relative z-10">
         <header className="text-center mb-12">
           <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-sci-fi-blue to-sci-fi-cyan bg-clip-text text-transparent">
             Time Travel Parameter Calculator
@@ -67,7 +85,12 @@ function App() {
           </p>
         </header>
 
-        <DateInput onCalculate={handleCalculate} loading={loading} />
+        <DateInput 
+          onCalculate={handleCalculate} 
+          loading={loading}
+          calculationComplete={calculationComplete}
+          onTravel={handleTravel}
+        />
 
         {error && (
           <div className="mb-6 p-4 bg-red-900/30 border border-red-500/50 rounded-lg text-red-200">
